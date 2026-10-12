@@ -1,5 +1,5 @@
-import React from 'react';
-import { Flag, Award, Cpu, RefreshCw } from 'lucide-react';
+import React, { useState } from 'react';
+import { Flag, Award, Cpu, RefreshCw, Link2, Check, X, Server } from 'lucide-react';
 
 interface NavbarProps {
   activeTab: 'predict' | 'results' | 'model';
@@ -7,6 +7,8 @@ interface NavbarProps {
   hasResults: boolean;
   backendConnected: boolean;
   onRefreshHealth: () => void;
+  apiUrl: string;
+  onUpdateApiUrl: (url: string) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -15,7 +17,24 @@ export const Navbar: React.FC<NavbarProps> = ({
   hasResults,
   backendConnected,
   onRefreshHealth,
+  apiUrl,
+  onUpdateApiUrl,
 }) => {
+  const [showConfig, setShowConfig] = useState(false);
+  const [inputUrl, setInputUrl] = useState(apiUrl);
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    onUpdateApiUrl(inputUrl.trim());
+    setShowConfig(false);
+  };
+
+  const handleReset = () => {
+    setInputUrl('');
+    onUpdateApiUrl('');
+    setShowConfig(false);
+  };
+
   return (
     <>
       {/* Top Desktop & Mobile Header */}
@@ -83,12 +102,12 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           </nav>
 
-          {/* Backend Status Badge */}
-          <div className="flex items-center gap-2">
+          {/* Backend Status Badge with Interactive Config */}
+          <div className="relative flex items-center gap-2">
             <button
-              onClick={onRefreshHealth}
-              title="Click to check backend status"
-              className="flex items-center gap-2 px-2.5 py-1.5 bg-[#14141A] border border-white/10 text-xs font-mono rounded-none hover:border-white/20 transition-colors cursor-pointer"
+              onClick={() => setShowConfig(!showConfig)}
+              title="Click to configure backend connection"
+              className="flex items-center gap-2 px-2.5 py-1.5 bg-[#14141A] border border-white/10 text-xs font-mono rounded-none hover:border-white/30 transition-colors cursor-pointer group"
             >
               <span
                 className={`w-2 h-2 rounded-full ${
@@ -97,11 +116,87 @@ export const Navbar: React.FC<NavbarProps> = ({
                     : 'bg-[#E10600] animate-pulse shadow-[0_0_8px_rgba(225,6,0,0.8)]'
                 }`}
               />
-              <span className="hidden sm:inline text-[#8A8A96]">
-                {backendConnected ? 'API READY' : 'OFFLINE / STANDBY'}
+              <span className="hidden sm:inline text-[#8A8A96] group-hover:text-white">
+                {backendConnected ? 'API READY' : 'CONNECT BACKEND'}
               </span>
-              <RefreshCw className="w-3 h-3 text-[#8A8A96] hover:text-white" />
+              <Server className="w-3 h-3 text-[#8A8A96] group-hover:text-white" />
             </button>
+
+            {/* Connection Config Popover */}
+            {showConfig && (
+              <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-[#121217] border border-white/20 p-4 shadow-2xl z-50 animate-in fade-in slide-in-from-top-2">
+                <div className="flex items-center justify-between pb-3 border-b border-white/10 mb-3">
+                  <div className="flex items-center gap-2">
+                    <Link2 className="w-4 h-4 text-[#E10600]" />
+                    <span className="text-xs font-bold uppercase tracking-wider font-heading text-white">
+                      Backend Connection
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setShowConfig(false)}
+                    className="text-[#8A8A96] hover:text-white"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="mb-3">
+                  <div className="flex items-center justify-between text-[11px] font-mono text-[#8A8A96] mb-1">
+                    <span>STATUS:</span>
+                    <span className={backendConnected ? 'text-emerald-400 font-bold' : 'text-[#E10600] font-bold'}>
+                      {backendConnected ? 'CONNECTED' : 'DISCONNECTED / OFFLINE'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] font-mono text-[#8A8A96]">
+                    <span className="truncate max-w-[200px]">TARGET: {apiUrl ? apiUrl : '(Same-origin relative /api)'}</span>
+                    <button
+                      type="button"
+                      onClick={onRefreshHealth}
+                      className="p-1 hover:text-white flex items-center gap-1 text-[10px]"
+                      title="Test Connection"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      <span>Ping</span>
+                    </button>
+                  </div>
+                </div>
+
+                <form onSubmit={handleSave} className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] uppercase font-bold text-[#8A8A96] mb-1">
+                      Custom Backend URL
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="https://f1-prediction-backend.vercel.app"
+                      value={inputUrl}
+                      onChange={(e) => setInputUrl(e.target.value)}
+                      className="w-full bg-[#1A1A22] border border-white/10 px-3 py-1.5 text-xs text-white placeholder-white/30 font-mono focus:border-[#E10600] focus:outline-none"
+                    />
+                    <p className="text-[10px] text-[#8A8A96] mt-1">
+                      Paste your deployed backend URL or leave empty for same domain.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+                    <button
+                      type="button"
+                      onClick={handleReset}
+                      className="px-3 py-1 bg-white/5 hover:bg-white/10 text-[11px] font-mono text-[#8A8A96] hover:text-white"
+                    >
+                      Reset Default
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-3 py-1 bg-[#E10600] hover:bg-[#FF2E2E] text-[11px] font-bold uppercase font-heading text-white flex items-center gap-1"
+                    >
+                      <Check className="w-3 h-3" />
+                      <span>Connect</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
           </div>
         </div>
       </header>

@@ -17,10 +17,32 @@ import type {
 } from './types';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 
+// Default Base API URL from environment
+const DEFAULT_API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
+
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'predict' | 'results' | 'model'>('predict');
   const [backendConnected, setBackendConnected] = useState<boolean>(false);
   const [backendError, setBackendError] = useState<string | null>(null);
+
+  // Dynamic API Base with localStorage persistence
+  const [apiBaseUrl, setApiBaseUrl] = useState<string>(() => {
+    try {
+      return localStorage.getItem('f1_custom_api_url') || DEFAULT_API_BASE;
+    } catch {
+      return DEFAULT_API_BASE;
+    }
+  });
+
+  const handleUpdateApiUrl = (newUrl: string) => {
+    const cleaned = newUrl.replace(/\/+$/, '');
+    setApiBaseUrl(cleaned);
+    try {
+      localStorage.setItem('f1_custom_api_url', cleaned);
+    } catch {
+      // ignore
+    }
+  };
 
   // Metadata
   const [drivers, setDrivers] = useState<DriverMeta[]>([]);
@@ -54,7 +76,7 @@ export const App: React.FC = () => {
   // Health Check
   const checkHealth = useCallback(async () => {
     try {
-      const res = await fetch('/api/health');
+      const res = await fetch(`${apiBaseUrl}/api/health`);
       if (res.ok) {
         const data: HealthResponse = await res.json();
         setBackendConnected(data.status === 'ok');
@@ -65,12 +87,12 @@ export const App: React.FC = () => {
     } catch {
       setBackendConnected(false);
     }
-  }, []);
+  }, [apiBaseUrl]);
 
   // Fetch Meta
   const fetchMeta = useCallback(async () => {
     try {
-      const res = await fetch('/api/meta');
+      const res = await fetch(`${apiBaseUrl}/api/meta`);
       if (res.ok) {
         const data: MetaResponse = await res.json();
         setCircuits(data.circuits || []);
@@ -95,12 +117,12 @@ export const App: React.FC = () => {
     } catch (e: any) {
       console.error('Failed to fetch metadata:', e);
     }
-  }, []);
+  }, [apiBaseUrl]);
 
   // Fetch Model Info
   const fetchModelInfo = useCallback(async () => {
     try {
-      const res = await fetch('/api/model-info');
+      const res = await fetch(`${apiBaseUrl}/api/model-info`);
       if (res.ok) {
         const data: ModelInfoResponse = await res.json();
         setModelInfo(data);
@@ -108,7 +130,7 @@ export const App: React.FC = () => {
     } catch (e: any) {
       console.error('Failed to fetch model info:', e);
     }
-  }, []);
+  }, [apiBaseUrl]);
 
   useEffect(() => {
     checkHealth();
@@ -129,7 +151,7 @@ export const App: React.FC = () => {
         grid: gridInputs,
       };
 
-      const res = await fetch('/api/predict', {
+      const res = await fetch(`${apiBaseUrl}/api/predict`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -195,6 +217,8 @@ export const App: React.FC = () => {
         setActiveTab={setActiveTab}
         hasResults={results !== null}
         backendConnected={backendConnected}
+        apiUrl={apiBaseUrl}
+        onUpdateApiUrl={handleUpdateApiUrl}
         onRefreshHealth={() => {
           checkHealth();
           fetchMeta();
