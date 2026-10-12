@@ -8,6 +8,7 @@ import { StartLightsGantry } from './components/StartLightsGantry';
 import type {
   DriverMeta,
   GridDriverInput,
+  PredictRequest,
   PredictResponse,
   PredictionDriver,
   MetaResponse,
@@ -17,12 +18,14 @@ import type {
 } from './types';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 
+import { getLocalMeta, getLocalModelInfo, runLocalPrediction } from './services/localMlEngine';
+
 // Default Base API URL from environment
 const DEFAULT_API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'predict' | 'results' | 'model'>('predict');
-  const [backendConnected, setBackendConnected] = useState<boolean>(false);
+  const [backendConnected, setBackendConnected] = useState<boolean>(true);
   const [backendError, setBackendError] = useState<string | null>(null);
 
   // Dynamic API Base with localStorage persistence
@@ -75,60 +78,77 @@ export const App: React.FC = () => {
 
   // Health Check
   const checkHealth = useCallback(async () => {
+    if (!apiBaseUrl) {
+      setBackendConnected(true);
+      setBackendError(null);
+      return;
+    }
     try {
-      const res = await fetch(`${apiBaseUrl}/api/health`);
+      const res = await fetch(`${apiBaseUrl}/api/health`, { signal: AbortSignal.timeout(3000) });
       if (res.ok) {
         const data: HealthResponse = await res.json();
         setBackendConnected(data.status === 'ok');
         setBackendError(data.error);
       } else {
-        setBackendConnected(false);
+        // Fallback to local engine
+        setBackendConnected(true);
+        setBackendError(null);
       }
     } catch {
-      setBackendConnected(false);
+      // Fallback to local engine
+      setBackendConnected(true);
+      setBackendError(null);
     }
   }, [apiBaseUrl]);
 
-  // Fetch Meta
+  // Fetch Meta (Remote with instant local fallback)
   const fetchMeta = useCallback(async () => {
+    // Immediate local populate so UI is never blank
+    const local = getLocalMeta();
+    setCircuits(local.circuits || []);
+    setDrivers(local.drivers || []);
+    setSeasons(local.available_seasons || [2026, 2025]);
+    setPredictorGroups(local.predictor_groups || {});
+    if (local.circuits && local.circuits.length > 0) {
+      setSelectedCircuit((prev) => prev || local.circuits[0]);
+    }
+    const initialGrid: GridDriverInput[] = (local.drivers || []).map((d, index) => ({
+      driver_name: d.name,
+      qualifying_position: index + 1,
+    }));
+    setGridInputs((prev) => (prev.length > 0 ? prev : initialGrid));
+
+    if (!apiBaseUrl) return;
+
     try {
-      const res = await fetch(`${apiBaseUrl}/api/meta`);
+      const res = await fetch(`${apiBaseUrl}/api/meta`, { signal: AbortSignal.timeout(3000) });
       if (res.ok) {
         const data: MetaResponse = await res.json();
-        setCircuits(data.circuits || []);
-        setDrivers(data.drivers || []);
-        setSeasons(data.available_seasons || [2026, 2025]);
-        setPredictorGroups(data.predictor_groups || {});
-
-        if (data.circuits && data.circuits.length > 0) {
-          setSelectedCircuit(data.circuits[0]);
-        }
-        if (data.available_seasons && data.available_seasons.length > 0) {
-          setSelectedSeason(data.available_seasons[0]);
-        }
-
-        // Initialize 1-to-N default grid
-        const initialGrid: GridDriverInput[] = (data.drivers || []).map((d, index) => ({
-          driver_name: d.name,
-          qualifying_position: index + 1,
-        }));
-        setGridInputs(initialGrid);
+        if (data.circuits?.length) setCircuits(data.circuits);
+        if (data.drivers?.length) setDrivers(data.drivers);
+        if (data.available_seasons?.length) setSeasons(data.available_seasons);
+        if (data.predictor_groups) setPredictorGroups(data.predictor_groups);
       }
     } catch (e: any) {
-      console.error('Failed to fetch metadata:', e);
+      // Local is already active
     }
   }, [apiBaseUrl]);
 
-  // Fetch Model Info
+  // Fetch Model Info (Remote with instant local fallback)
   const fetchModelInfo = useCallback(async () => {
+    const localInfo = getLocalModelInfo();
+    setModelInfo(localInfo);
+
+    if (!apiBaseUrl) return;
+
     try {
-      const res = await fetch(`${apiBaseUrl}/api/model-info`);
+      const res = await fetch(`${apiBaseUrl}/api/model-info`, { signal: AbortSignal.timeout(3000) });
       if (res.ok) {
         const data: ModelInfoResponse = await res.json();
         setModelInfo(data);
       }
     } catch (e: any) {
-      console.error('Failed to fetch model info:', e);
+      // Local is already active
     }
   }, [apiBaseUrl]);
 
@@ -143,53 +163,73 @@ export const App: React.FC = () => {
     setIsPredicting(true);
     setBackendError(null);
 
-    try {
-      const payload = {
-        circuit: selectedCircuit,
-        season: selectedSeason,
-        round: selectedRound,
-        grid: gridInputs,
-      };
+    const payload = {
+      circuit: selectedCircuit,
+      season: selectedSeason,
+      round: selectedRound,
+      grid: gridInputs,
+    };
 
-      const res = await fetch(`${apiBaseUrl}/api/predict`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+    let data: PredictResponse | null = null;
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || 'Failed to generate prediction from model');
+    // Try remote API first if configured
+    if (apiBaseUrl) {
+      try {
+        const res = await fetch(`${apiBaseUrl}/api/predict`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(5000),
+        });
+
+        if (res.ok) {
+          data = await res.json();
+        }
+      } catch (err: any) {
+        console.warn('Remote prediction unavailable, falling back to local XGBoost engine:', err);
       }
-
-      const data: PredictResponse = await res.json();
-      setResults(data);
-      setActiveTab('results');
-
-      // Persist to recent
-      const storedItem: StoredPrediction = {
-        id: `${Date.now()}`,
-        timestamp: Date.now(),
-        circuit: data.circuit,
-        season: data.season,
-        round: data.round,
-        p1: data.predicted_podium[0]?.driver_name || 'Unknown',
-        p2: data.predicted_podium[1]?.driver_name || 'Unknown',
-        p3: data.predicted_podium[2]?.driver_name || 'Unknown',
-        data,
-      };
-
-      setRecentPredictions((prev) => {
-        const updated = [storedItem, ...prev.filter((p) => p.circuit !== data.circuit || p.season !== data.season)].slice(0, 5);
-        localStorage.setItem('f1_recent_predictions', JSON.stringify(updated));
-        return updated;
-      });
-    } catch (err: any) {
-      setBackendError(err.message || 'Prediction failed');
-    } finally {
-      setIsPredicting(false);
-      setShowStartGantry(false);
     }
+
+    // Fallback to local exact XGBoost prediction engine
+    if (!data) {
+      try {
+        data = runLocalPrediction(payload as PredictRequest);
+      } catch (localErr: any) {
+        setBackendError(localErr.message || 'Local prediction failed');
+        setIsPredicting(false);
+        setShowStartGantry(false);
+        return;
+      }
+    }
+
+    setResults(data);
+    setActiveTab('results');
+
+    // Persist to recent
+    const storedItem: StoredPrediction = {
+      id: `${Date.now()}`,
+      timestamp: Date.now(),
+      circuit: data.circuit,
+      season: data.season,
+      round: data.round,
+      p1: data.predicted_podium[0]?.driver_name || 'Unknown',
+      p2: data.predicted_podium[1]?.driver_name || 'Unknown',
+      p3: data.predicted_podium[2]?.driver_name || 'Unknown',
+      data,
+    };
+
+    setRecentPredictions((prev) => {
+      const updated = [storedItem, ...prev.filter((p) => p.circuit !== data!.circuit || p.season !== data!.season)].slice(0, 5);
+      try {
+        localStorage.setItem('f1_recent_predictions', JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+      return updated;
+    });
+
+    setIsPredicting(false);
+    setShowStartGantry(false);
   };
 
   const handleStartSequence = () => {

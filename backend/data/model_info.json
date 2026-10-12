@@ -1,0 +1,105 @@
+{
+  "model_type": "XGBClassifier",
+  "hyperparameters": {
+    "n_estimators": 200,
+    "max_depth": 4,
+    "learning_rate": 0.05,
+    "eval_metric": "logloss",
+    "random_state": 42
+  },
+  "predictors": [
+    "driver_podium_rate_5",
+    "driver_podium_rate_3",
+    "driver_circuit_podium_rate",
+    "driver_previous_finish",
+    "driver_avg_finish_3",
+    "driver_avg_finish_5",
+    "driver_season_avg_finish",
+    "driver_age",
+    "driver_season_race_count",
+    "driver_circuit_race_count",
+    "constructor_avg_finish_3",
+    "constructor_avg_finish_5",
+    "grid_position",
+    "qualifying_position",
+    "grid_penalty",
+    "circuit_altitude",
+    "circuit_latitude",
+    "circuit_longitude",
+    "round",
+    "season",
+    "q1_time"
+  ],
+  "predictor_groups": {
+    "Grid and Qualifying": [
+      "qualifying_position",
+      "grid_position",
+      "grid_penalty",
+      "q1_time"
+    ],
+    "Driver Form": [
+      "driver_previous_finish",
+      "driver_avg_finish_3",
+      "driver_avg_finish_5",
+      "driver_podium_rate_3",
+      "driver_podium_rate_5"
+    ],
+    "Circuit History": [
+      "driver_circuit_avg_finish",
+      "driver_circuit_race_count",
+      "driver_circuit_podium_rate"
+    ],
+    "Constructor Form": [
+      "constructor_avg_finish_3",
+      "constructor_avg_finish_5"
+    ],
+    "Circuit Geography": [
+      "circuit_latitude",
+      "circuit_longitude",
+      "circuit_altitude"
+    ],
+    "Season Context": [
+      "season",
+      "round",
+      "driver_season_avg_finish",
+      "driver_season_race_count",
+      "driver_age"
+    ]
+  },
+  "feature_importances": {
+    "qualifying_position": 0.3027,
+    "grid_position": 0.3008,
+    "driver_podium_rate_5": 0.0504,
+    "driver_avg_finish_5": 0.0476,
+    "constructor_avg_finish_3": 0.0418,
+    "driver_podium_rate_3": 0.0411,
+    "constructor_avg_finish_5": 0.036,
+    "driver_season_avg_finish": 0.018,
+    "driver_previous_finish": 0.0174,
+    "circuit_longitude": 0.0153,
+    "driver_circuit_podium_rate": 0.0143,
+    "q1_time": 0.0139,
+    "circuit_latitude": 0.0131,
+    "season": 0.0126,
+    "driver_avg_finish_3": 0.0125,
+    "driver_age": 0.0124,
+    "circuit_altitude": 0.0113,
+    "driver_circuit_race_count": 0.0108,
+    "round": 0.0101,
+    "grid_penalty": 0.0094,
+    "driver_season_race_count": 0.0085
+  },
+  "metrics": {
+    "accuracy": 89.32,
+    "precision": 73.17,
+    "recall": 66.04,
+    "roc_auc": 0.9294,
+    "podium_class_share": 18.33,
+    "test_samples": 1732,
+    "train_samples": 6925
+  },
+  "date_range": {
+    "min_date": "1994-03-27",
+    "max_date": "2026-07-26"
+  }
+}

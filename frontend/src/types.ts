@@ -11,6 +11,13 @@ export interface GridDriverInput {
   q1_time?: string;
 }
 
+export interface PredictRequest {
+  circuit: string;
+  season: number;
+  round: number;
+  grid: GridDriverInput[];
+}
+
 export interface PredictionDriver {
   driver_name: string;
   driver_code: string;
